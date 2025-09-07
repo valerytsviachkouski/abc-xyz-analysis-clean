@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>ABC-XYZ Анализ</title>
+</head>
+<body>
+    <h1>ABC-XYZ Анализ</h1>
+    <button onclick="startAnalysis()">Запустить анализ</button>
+
+    <p id="status"></p>
+    <div id="download"></div>
+
+    <script>
+        let currentTaskId = null;
+        let checkInterval = null;
+
+        async function startAnalysis() {
+            document.getElementById("status").innerText = "Анализ запущен ⏳";
+            document.getElementById("download").innerHTML = "";
+
+            // Отправляем POST на /analyze
+            let response = await fetch("/analyze", {method: "POST"});
+            let data = await response.json();
+            currentTaskId = data.task_id;
+
+            // Запускаем периодическую проверку статуса
+            checkInterval = setInterval(checkStatus, 2000);
+        }
+
+        async function checkStatus() {
+            let response = await fetch(`/status/${currentTaskId}`);
+            let data = await response.json();
+
+            if (data.ready) {
+                clearInterval(checkInterval);
+                document.getElementById("status").innerText = "Готово ✅";
+
+                document.getElementById("download").innerHTML =
+                    `<a href="/download/${currentTaskId}" download>
+                        📥 Скачать результат (Excel)
+                     </a>`;
+            }
+        }
+    </script>
+</body>
+</html>
+
+
