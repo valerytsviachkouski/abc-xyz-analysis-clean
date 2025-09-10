@@ -41,8 +41,8 @@ def run_analysis(out_file: Path):
         abc_file = Path(config["abc_file"])
         out_dir = Path(config["output_dir"])
         xyz_thresholds = config["xyz_thresholds"]
-        period_days = config["period_days"]
-
+        # period_days = config["period_days"]
+        log_message(f"Определено X Y Z: {xyz_thresholds}")
         log_message("Конфиг загружен")
 
         # Пути для промежуточных файлов
@@ -53,6 +53,10 @@ def run_analysis(out_file: Path):
         # === 2. Трансформация исходной таблицы ===
         df = pd.read_excel(input_file, header=None)
         log_message("Исходная таблица загружена")
+
+        # период оборачиваемости должен равняться количеству столбцов исходной таблицы без столбца Наименование
+        period_days = df.shape[1] - 1  # Количество столбцов минус 1
+        log_message(f"Определено количество дней: {period_days}")
 
         df.iloc[3, 1:] = df.iloc[3, 1:].replace("отгрузка продукта", "отгрузка")
         for i in range(4, len(df), 3):
@@ -115,14 +119,17 @@ def run_analysis(out_file: Path):
             suffixes=("_отгрузка", "_остаток")
         )
 
+        # добавляем ABC-группу
         df = pd.merge(df, abc[["Наименование", "Группа ABC"]], on="Наименование", how="left")
 
+        # оборачиваемость
         df["Оборачиваемость_дни"] = df.apply(
             lambda x: (x["Средний"] * period_days) / x["Всего"]
             if pd.notna(x["Всего"]) and x["Всего"] > 0 else 9999,
             axis=1
         )
 
+        # XYZ-группа
         def assign_xyz(turnover: float) -> str:
             if turnover <= xyz_thresholds["X"]:
                 return "X"
@@ -133,6 +140,7 @@ def run_analysis(out_file: Path):
             else:
                 return "Неликвид"
 
+        df["Оборачиваемость_дни"] = df["Оборачиваемость_дни"].round().astype(int)
         df["Группа XYZ"] = df["Оборачиваемость_дни"].apply(assign_xyz)
 
         # комбинированная группа
@@ -140,10 +148,14 @@ def run_analysis(out_file: Path):
 
         # Переименование столбцов
         df.rename(columns={
-            "Всего": "Всего отгрузка",
-            "Средний": "Средний остаток"}, inplace=True)
+            "Всего": "Всего отгрузка,кг",
+            "Средний": "Средний остаток,кг"}, inplace=True)
 
         log_message("ABC-XYZ анализ рассчитан")
+
+        # ✅ Форматируем числовые значения до двух знаков после запятой
+        df["Всего отгрузка,кг"] = df["Всего отгрузка,кг"].astype(float).round(2)
+        df["Средний остаток,кг"] = df["Средний остаток,кг"].astype(float).round(2)
 
         # === 5. Сводная матрица и диаграмма ===
         pivot = pd.crosstab(df["Группа ABC"], df["Группа XYZ"])
