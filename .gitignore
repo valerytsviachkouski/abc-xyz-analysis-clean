@@ -1,17 +1,46 @@
 # Игнорируем виртуальное окружение
+# Виртуальное окружение
 .venv/
+env/
+venv/
 
 # Python кэш
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.db
 
-# Временные файлы
+# Временные и выходные файлы
 *.log
-*.xlsx
 *.tmp
+*.bak
+*.swp
+*.xlsx
+*.csv
+*.png
+*.jpg
+*.jpeg
 
-# IDE
+# IDE и редакторы
 .idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+
+# Системные файлы
+.DS_Store
+Thumbs.db
+
+# Gitpod специфические
+.gitpod.yml
+
+# Папки с результатами анализа
+backend/static/results/
+backend/output/
+backend/data/Исходная таблица*
+backend/data/ABC_группы.xlsx
+backend/history.log
+backend/error.log
+
 

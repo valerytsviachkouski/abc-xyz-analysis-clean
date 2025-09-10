@@ -1,34 +1,36 @@
 #  код (обёрнут в функцию run_analysis)
+# os.environ['TCL_LIBRARY'] = r'C:\Program Files\Python313\tcl\tcl8.6'
+
 import os
 import traceback
 import pandas as pd
 import matplotlib
 
-# отключаем GUI-бэкенд для Matplotlib (важно для серверов без экрана)
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
+from datetime import datetime
 
 from pathlib import Path
 import json
 from openpyxl import load_workbook
 from openpyxl.drawing.image import Image
 
-
 os.environ['TCL_LIBRARY'] = r'C:\Program Files\Python313\tcl\tcl8.6'
 
-
 def log_message(msg: str):
-    """
-    Записывает сообщение в error.log (используется и для ошибок, и для прогресса).
-    """
     log_file = Path(__file__).resolve().parent / "error.log"
     with open(log_file, "a", encoding="utf-8") as f:
         f.write(f"[INFO] {msg}\n")
 
-
-def run_analysis(out_file: Path):
+def run_analysis(out_file: Path, input_file: Path, task_id: str):
     try:
         log_message("=== Запуск анализа ===")
+
+        def save_history(task_id: str, input_file: Path, out_file: Path):
+            history_path = Path(__file__).resolve().parent / "history.log"
+            with open(history_path, "a", encoding="utf-8") as f:
+                f.write(f"{datetime.now().isoformat()} | {task_id} | {input_file.name} → {out_file.name}\n")
 
         # === 1. Загружаем конфиг ===
         BASE_DIR = Path(__file__).resolve().parent.parent
@@ -37,15 +39,21 @@ def run_analysis(out_file: Path):
         with open(CONFIG_PATH, encoding="utf-8") as f:
             config = json.load(f)
 
-        input_file = Path(config["input_file"])
-        abc_file = Path(config["abc_file"])
-        out_dir = Path(config["output_dir"])
+        abc_file = BASE_DIR / config["abc_file"]
+        out_dir = out_file.parent
         xyz_thresholds = config["xyz_thresholds"]
+
         # period_days = config["period_days"]
         log_message(f"Определено X Y Z: {xyz_thresholds}")
         log_message("Конфиг загружен")
 
         # Пути для промежуточных файлов
+
+        # период оборачиваемости должен равняться количеству столбцов исходной таблицы без столбца Наименование
+        log_message(f"Определено X Y Z: {xyz_thresholds}")
+
+        # пути промежуточных таблиц
+
         out_path_w = out_dir / "Исходная таблица_w.xlsx"
         out_path_ship = out_dir / "Исходная таблица_отгрузка.xlsx"
         out_path_stock = out_dir / "Исходная таблица_остаток.xlsx"
@@ -63,7 +71,6 @@ def run_analysis(out_file: Path):
             if i < len(df):
                 df.iloc[i + 2, 0] = df.iloc[i, 0]
         df = df.drop(df.index[2::3]).reset_index(drop=True)
-
         df.to_excel(out_path_w, header=False, index=False)
         log_message("Таблица трансформирована и сохранена (W)")
 
@@ -76,7 +83,6 @@ def run_analysis(out_file: Path):
             df_num = df_out.iloc[:, 1:].replace("-", 0)
             df_num = pd.to_numeric(df_num.stack(), errors="coerce").unstack(fill_value=0)
             df_out["Всего"] = df_num.sum(axis=1).astype("object")
-
             if df_out.shape[0] > 0:
                 df_out.at[0, "Всего"] = "Всего"
             if df_out.shape[0] > 1:
@@ -107,7 +113,6 @@ def run_analysis(out_file: Path):
 
         ship = ship[pd.to_numeric(ship["Всего"], errors="coerce").notna()]
         stock = stock[pd.to_numeric(stock["Средний"], errors="coerce").notna()]
-
         ship["Всего"] = pd.to_numeric(ship["Всего"], errors="coerce")
         stock["Средний"] = pd.to_numeric(stock["Средний"], errors="coerce")
 
@@ -115,8 +120,7 @@ def run_analysis(out_file: Path):
             ship[["Наименование", "Всего"]],
             stock[["Наименование", "Средний"]],
             on="Наименование",
-            how="inner",
-            suffixes=("_отгрузка", "_остаток")
+            how="inner"
         )
 
         # добавляем ABC-группу
@@ -142,11 +146,8 @@ def run_analysis(out_file: Path):
 
         df["Оборачиваемость_дни"] = df["Оборачиваемость_дни"].round().astype(int)
         df["Группа XYZ"] = df["Оборачиваемость_дни"].apply(assign_xyz)
-
-        # комбинированная группа
         df["ABC_XYZ"] = df["Группа ABC"] + "-" + df["Группа XYZ"]
 
-        # Переименование столбцов
         df.rename(columns={
             "Всего": "Всего отгрузка,кг",
             "Средний": "Средний остаток,кг"}, inplace=True)
@@ -167,29 +168,19 @@ def run_analysis(out_file: Path):
 
         log_message("Excel с данными и сводной матрицей сохранён")
 
-        # Загружаем существующий Excel-файл
+        save_history(task_id, input_file, out_file)
+
         wb = load_workbook(out_file)
         ws = wb["Сводная матрица"]
+        start_row = ws.max_row + 2
 
-        # Определим, где заканчивается таблица (например, последняя строка — 5)
-        # Можно заменить 5 на динамический расчёт, если таблица может быть разной длины
-        start_row = ws.max_row + 2  # Пропускаем одну строку после таблицы
+        ws.cell(row=start_row, column=1).value = "A – номенклатурные позиции УК, обеспечивающие 85% суммы маржинальной прибыли по факту продаж за 1 полугодие 2025г."
+        ws.cell(row=start_row + 1, column=1).value = "B номенклатурные позиции УК, обеспечивающие 15% суммы маржинальной прибыли по факту продаж за 1 полугодие 2025г."
+        ws.cell(row=start_row + 2, column=1).value = "C номенклатурные позиции УК, обеспечивающие 5% суммы маржинальной прибыли по факту продаж за 1 полугодие 2025г."
+        ws.cell(row=start_row + 4, column=1).value = "Оборачиваемость = Средний остаток товара на складе * Количество дней в периоде / Объем продаж (отгрузки) за  период"
 
-        # Добавляем пояснения
-        ws.cell(row=start_row,
-                column=1).value = "A – номенклатурные позиции УК, обеспечивающие 85% суммы маржинальной прибыли по факту продаж за 1 полугодие 2025г."
-        ws.cell(row=start_row + 1,
-                column=1).value = "B – номенклатурные позиции УК, обеспечивающие 15% суммы маржинальной прибыли по факту продаж за 1 полугодие 2025г."
-        ws.cell(row=start_row + 2,
-                column=1).value = "C – номенклатурные позиции УК, обеспечивающие 5% суммы маржинальной прибыли по факту продаж за 1 полугодие 2025г."
-        ws.cell(row=start_row + 4,
-                column=1).value = "Оборачиваемость = Средний остаток товара на складе * Количество дней в периоде / Объем продаж (отгрузки) за  период"
-
-        # Сохраняем изменения
         wb.save(out_file)
 
-
-        # диаграмма
         fig, ax = plt.subplots(figsize=(6, 6))
         ax.pie(
             counts,
@@ -206,7 +197,7 @@ def run_analysis(out_file: Path):
             f"Z ≤ {xyz_thresholds['Z']} дн."
         )
 
-        ax.set_title(f"ABC-XYZ анализ ИЮНЬ-АВГУСТ 25(доли SKU)\nОборачиваемость: {xyz_info}\nПериод: {period_days}", fontsize=11)
+        ax.set_title(f"ABC-XYZ анализ\n{xyz_info}\nПериод: {period_days}", fontsize=11)
         ax.axis("equal")
         plt.tight_layout()
 
@@ -215,7 +206,6 @@ def run_analysis(out_file: Path):
         plt.close()
         log_message("Диаграмма сохранена как PNG")
 
-        wb = load_workbook(out_file)
         ws_chart = wb.create_sheet("Диаграмма")
         img = Image(str(chart_path))
         img.width, img.height = 480, 480
@@ -230,6 +220,7 @@ def run_analysis(out_file: Path):
         with open(error_log, "a", encoding="utf-8") as f:
             f.write(f"\n[ERROR] Ошибка при выполнении анализа: {e}\n")
             f.write(traceback.format_exc() + "\n")
+
 
 
 

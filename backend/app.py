@@ -10,6 +10,8 @@ from backend.analysis import run_analysis
 
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse
+from fastapi import UploadFile, File
 from fastapi import Request
 
 
@@ -21,6 +23,9 @@ RESULTS_DIR = STATIC_DIR / "results"
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 ERROR_LOG = BASE_DIR / "error.log"
 
+UPLOAD_DIR = BASE_DIR / "data"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
 
 app.mount("/static", StaticFiles(directory="backend/static"), name="static")
 
@@ -30,15 +35,29 @@ def read_root():
     # index_path = Path("backend/static/index.html")
     return index_path.read_text(encoding="utf-8")
 
+@app.post("/upload")
+async def upload_excel(file: UploadFile = File(...)):
+    file_path = UPLOAD_DIR / file.filename
+    contents = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(contents)
+    return {"message": f"Файл {file.filename} загружен", "filename": file.filename}    
+
 
 @app.post("/analyze")
-def analyze(background_tasks: BackgroundTasks):
-    """Запускает анализ в фоне и возвращает task_id.
-    ВАЖНО: run_analysis ДОЛЖНА писать в out_file, который мы передаём сюда!"""
+async def analyze(request: Request, background_tasks: BackgroundTasks):
+    body = await request.json()
+    filename = body.get("filename")
+    input_path = BASE_DIR / "data" / filename
+
     task_id = str(uuid.uuid4())
     out_file = RESULTS_DIR / f"analysis_{task_id}.xlsx"
-    background_tasks.add_task(run_analysis, out_file)
+
+    # ✅ Передаём оба аргумента
+    background_tasks.add_task(run_analysis, out_file, input_path, task_id)
+
     return {"task_id": task_id}
+
 
 @app.get("/status/{task_id}")
 def status(task_id: str):
@@ -66,4 +85,12 @@ def download(task_id: str):
      return FileResponse(out_file, filename=out_file.name)
     return {"error": "Файл ещё не готов или не найден"}
 
+
+# скачиваем диаграмму на вэб-странице
+@app.get("/chart/{task_id}")
+def get_chart(task_id: str):
+    chart_path = RESULTS_DIR / f"ABC_XYZ_pie.png"
+    if chart_path.exists():
+        return FileResponse(chart_path, media_type="image/png")
+    return {"error": "Диаграмма не найдена"}
 

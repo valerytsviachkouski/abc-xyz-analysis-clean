@@ -1,7 +1,6 @@
 {
-  "input_file": "D:/Каштан/Анализ ГП 2025г/ABC_XYZ анализ движения УК 2025/Исходная таблица ИЮНЬ-АВГУСТ 25.xlsx",
-  "abc_file": "D:/Каштан/Анализ ГП 2025г/ABC_XYZ анализ движения УК 2025/ABC_анализ_с_группами.xlsx",
-  "output_dir": "D:/Каштан/Анализ ГП 2025г/ABC_XYZ анализ движения УК 2025",
+  "abc_file": "backend/data/ABC_группы.xlsx",
+  "output_dir": "backend/output",
   "xyz_thresholds": {
     "X": 60,
     "Y": 120,

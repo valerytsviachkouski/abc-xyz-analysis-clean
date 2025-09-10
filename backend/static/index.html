@@ -6,43 +6,78 @@
 </head>
 <body>
     <h1>ABC-XYZ Анализ</h1>
-    <button onclick="startAnalysis()">Запустить анализ</button>
+
+    <h2>1. Загрузите Excel-файл</h2>
+    <form id="uploadForm">
+        <input type="file" name="file" required />
+        <button type="submit">Загрузить</button>
+    </form>
+
+    <h2>2. Запустите анализ</h2>
+    <button id="analyzeBtn" onclick="startAnalysis()" disabled>Запустить анализ</button>
 
     <p id="status"></p>
     <div id="download"></div>
+    
 
     <script>
-        let currentTaskId = null;
-        let checkInterval = null;
+    let currentTaskId = null;
+    let checkInterval = null;
+    let uploadedFileName = null;
 
-        async function startAnalysis() {
-            document.getElementById("status").innerText = "Анализ запущен ⏳";
-            document.getElementById("download").innerHTML = "";
+    document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const response = await fetch("/upload", {
+        method: "POST",
+        body: formData
+        });
+        const result = await response.json();
+        alert(result.message);
+        uploadedFileName = result.filename;
+        document.getElementById("analyzeBtn").disabled = false;
+    });
 
-            // Отправляем POST на /analyze
-            let response = await fetch("/analyze", {method: "POST"});
-            let data = await response.json();
-            currentTaskId = data.task_id;
-
-            // Запускаем периодическую проверку статуса
-            checkInterval = setInterval(checkStatus, 2000);
+    async function startAnalysis() {
+        if (!uploadedFileName) {
+            alert("Сначала загрузите Excel-файл 📄");
+            return;
         }
 
-        async function checkStatus() {
-            let response = await fetch(`/status/${currentTaskId}`);
-            let data = await response.json();
+        document.getElementById("status").innerText = "Анализ запущен ⏳";
+        document.getElementById("download").innerHTML = "";
 
-            if (data.ready) {
-                clearInterval(checkInterval);
-                document.getElementById("status").innerText = "Готово ✅";
+        let response = await fetch("/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filename: uploadedFileName })
+        });
 
-                document.getElementById("download").innerHTML =
-                    `<a href="/download/${currentTaskId}" download>
-                        📥 Скачать результат (Excel)
-                     </a>`;
-            }
+        let data = await response.json();
+        currentTaskId = data.task_id;
+        checkInterval = setInterval(checkStatus, 2000);
+    }
+
+
+    async function checkStatus() {
+        let response = await fetch(`/status/${currentTaskId}`);
+        let data = await response.json();
+
+        if (data.ready) {
+        clearInterval(checkInterval);
+        document.getElementById("status").innerText = "Готово ✅";
+        document.getElementById("download").innerHTML =
+            `<a href="/download/${currentTaskId}" download>
+            📥 Скачать результат (Excel)
+            </a><br>
+            <img src="/chart/${currentTaskId}" alt="Диаграмма ABC-XYZ" style="margin-top:10px; max-width:500px;">`;
+        } else if (data.error) {
+        document.getElementById("status").innerText = "Ошибка ❌";
+        console.error(data.error);
         }
+    }
     </script>
+
 </body>
 </html>
 
