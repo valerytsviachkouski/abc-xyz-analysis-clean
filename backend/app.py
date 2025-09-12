@@ -1,7 +1,10 @@
 # Flask/FastAPI
 # Запуск: python -m uvicorn backend.app:app --reload --port 8000
 # Flask/FastAPI
-# Запуск: python -m uvicorn backend.app:app --reload --port 8000
+# Запуск с Gitpod: python -m uvicorn backend.app:app --reload --host 0.0.0.0 --port 8000
+
+# Запуск PyCharm Терминал uvicorn backend.app:app --reload
+
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.responses import FileResponse
 from pathlib import Path
