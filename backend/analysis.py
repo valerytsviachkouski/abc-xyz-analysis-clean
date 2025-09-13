@@ -8,13 +8,14 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-
 from datetime import datetime
-
 from pathlib import Path
 import json
-from openpyxl import load_workbook
 from openpyxl.drawing.image import Image
+from openpyxl.styles import Font, Alignment
+from openpyxl.utils import get_column_letter
+from openpyxl import load_workbook
+from openpyxl.styles import Font, PatternFill
 
 os.environ['TCL_LIBRARY'] = r'C:\Program Files\Python313\tcl\tcl8.6'
 
@@ -46,8 +47,6 @@ def run_analysis(out_file: Path, input_file: Path, task_id: str):
         # period_days = config["period_days"]
         log_message(f"Определено X Y Z: {xyz_thresholds}")
         log_message("Конфиг загружен")
-
-        # Пути для промежуточных файлов
 
         # период оборачиваемости должен равняться количеству столбцов исходной таблицы без столбца Наименование
         log_message(f"Определено X Y Z: {xyz_thresholds}")
@@ -152,21 +151,76 @@ def run_analysis(out_file: Path, input_file: Path, task_id: str):
             "Всего": "Всего отгрузка,кг",
             "Средний": "Средний остаток,кг"}, inplace=True)
 
+        #============================================================
+        # === Расширение данных: добавляем "Без группы" ===
+        df_no_abc = df[df["Группа ABC"].isna() & df["Группа XYZ"].notna()].copy()
+        df_no_abc["Группа ABC"] = "Без группы"
+        df_no_abc["ABC_XYZ"] = df_no_abc["Группа ABC"] + "-" + df_no_abc["Группа XYZ"]
+
+        df_full = pd.concat([df, df_no_abc], ignore_index=True)
+
+        # === Сводная матрица по весу отгрузки ===
+        pivot_weight = df_full.pivot_table(
+            index="Группа ABC",
+            columns="Группа XYZ",
+            values="Всего отгрузка,кг",
+            aggfunc="sum",
+            fill_value=0
+        )
+
+        # Переводим в проценты
+        total_weight = df_full["Всего отгрузка,кг"].sum()
+        pivot_percent = (pivot_weight / total_weight * 100).round(2)
+
+        # Переименовываем столбцы
+        pivot_percent.columns = [f"{col}(%)" for col in pivot_percent.columns]
+
+        # Проверка и создание файла, если он отсутствует
+        if not out_file.exists():
+            with pd.ExcelWriter(out_file, engine="openpyxl") as writer:
+                # Создаём пустой лист или записываем базовые данные
+                pd.DataFrame().to_excel(writer, sheet_name="Инициализация", index=False)
+            log_message(f"Создан новый Excel-файл: {out_file.name}")
+
+        # === Сохраняем в Excel ===
+        with pd.ExcelWriter(out_file, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
+            df_full.to_excel(writer, sheet_name="ABC_XYZ_данные", index=False)
+            pivot_percent.to_excel(writer, sheet_name="Сводная матрица")
+
+        log_message("Сводная матрица с 'Без группы' и процентами по отгрузке сохранена")
         log_message("ABC-XYZ анализ рассчитан")
+
+        # === Форматирование листа "ABC_XYZ_данные" ===
+        wb = load_workbook(out_file)
+        ws_data = wb["ABC_XYZ_данные"]
+
+        # Заголовки — жирный шрифт и выравнивание
+        for cell in ws_data[1]:
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal="center")
+
+        # Формат числовых колонок
+        header_row = [cell.value for cell in ws_data[1]]
+        numeric_columns = ["Всего отгрузка,кг", "Средний остаток,кг", "Оборачиваемость_дни"]
+
+        for col_name in numeric_columns:
+            if col_name in header_row:
+                col_index = header_row.index(col_name) + 1
+                for row in ws_data.iter_rows(min_row=2, min_col=col_index, max_col=col_index):
+                    for cell in row:
+                        cell.number_format = '0.00'
+
+        # Автоширина столбцов
+        for col in ws_data.columns:
+            max_length = max(len(str(cell.value)) if cell.value else 0 for cell in col)
+            ws_data.column_dimensions[get_column_letter(col[0].column)].width = max_length + 2
+
+        log_message("Форматирование листа 'ABC_XYZ_данные' завершено")
+        wb.save(out_file)
 
         # ✅ Форматируем числовые значения до двух знаков после запятой
         df["Всего отгрузка,кг"] = df["Всего отгрузка,кг"].astype(float).round(2)
         df["Средний остаток,кг"] = df["Средний остаток,кг"].astype(float).round(2)
-
-        # === 5. Сводная матрица и диаграмма ===
-        pivot = pd.crosstab(df["Группа ABC"], df["Группа XYZ"])
-        counts = df["ABC_XYZ"].value_counts().sort_index()
-
-        with pd.ExcelWriter(out_file, engine="openpyxl") as writer:
-            df.to_excel(writer, sheet_name="ABC_XYZ_данные", index=False)
-            pivot.to_excel(writer, sheet_name="Сводная матрица")
-
-        log_message("Excel с данными и сводной матрицей сохранён")
 
         save_history(task_id, input_file, out_file)
 
@@ -179,26 +233,71 @@ def run_analysis(out_file: Path, input_file: Path, task_id: str):
         ws.cell(row=start_row + 2, column=1).value = "C номенклатурные позиции УК, обеспечивающие 5% суммы маржинальной прибыли по факту продаж за 1 полугодие 2025г."
         ws.cell(row=start_row + 4, column=1).value = "Оборачиваемость = Средний остаток товара на складе * Количество дней в периоде / Объем продаж (отгрузки) за  период"
 
+        # === Форматирование листа "Сводная матрица" ===
+        # Переводим pivot_weight в доли, не проценты
+        pivot_percent = (pivot_weight / total_weight).round(4)
+
+        # Переименовываем столбцы
+        pivot_percent.columns = [f"{col}(%)" for col in pivot_percent.columns]
+
+        # Сохраняем в Excel
+        with pd.ExcelWriter(out_file, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
+            pivot_percent.to_excel(writer, sheet_name="Сводная матрица")
+
+        # Форматирование
+        wb = load_workbook(out_file)
+        ws_matrix = wb["Сводная матрица"]
+
+        # Заголовки
+        for cell in ws_matrix[1]:
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal="center")
+
+        # Формат процентов
+        for row in ws_matrix.iter_rows(min_row=2, min_col=2):
+            for cell in row:
+                cell.number_format = '0.00%'
+
+        # Цвет строки "Без группы"
+        fill = PatternFill(start_color="FFFF99", end_color="FFFF99", fill_type="solid")
+        for row in ws_matrix.iter_rows(min_row=2, max_row=ws_matrix.max_row):
+            if row[0].value == "Без группы":
+                for cell in row:
+                    cell.fill = fill
+
+        # Автоширина
+        for col in ws_matrix.columns:
+            max_length = max(len(str(cell.value)) if cell.value else 0 for cell in col)
+            ws_matrix.column_dimensions[get_column_letter(col[0].column)].width = max_length + 2
+
+        wb.save(out_file)
+        log_message("Форматирование 'Сводной матрицы' завершено")
+
+        # === Удаление лишнего листа "Инициализация" ===
+        if "Инициализация" in wb.sheetnames:
+            wb.remove(wb["Инициализация"])
+            log_message("Удалён лишний лист 'Инициализация'")
+
         wb.save(out_file)
 
-        fig, ax = plt.subplots(figsize=(6, 6))
-        ax.pie(
-            counts,
-            labels=counts.index,
-            autopct="%1.1f%%",
-            startangle=90,
-            textprops={'fontsize': 9},
-            radius=0.7
-        )
+
+        # Группировка по ABC_XYZ
+        weights = df_full.groupby("ABC_XYZ")["Всего отгрузка,кг"].sum()
+        weights_percent = (weights / total_weight * 100).round(2)
 
         xyz_info = (
             f"X ≤ {xyz_thresholds['X']} дн., "
             f"Y ≤ {xyz_thresholds['Y']} дн., "
             f"Z ≤ {xyz_thresholds['Z']} дн."
         )
-
-        ax.set_title(f"ABC-XYZ анализ\n{xyz_info}\nПериод: {period_days}", fontsize=11)
-        ax.axis("equal")
+        # горизонтальная столбчатая диаграмма
+        weights_percent.sort_values().plot.barh(
+            figsize=(10, 8),
+            color="skyblue",
+            edgecolor="black"
+        )
+        plt.xlabel("Доля отгрузки, %")
+        plt.title(f"ABC-XYZ анализ январь_август 25\n{xyz_info}\nПериод: {period_days}", fontsize=11)
         plt.tight_layout()
 
         chart_path = out_dir / "ABC_XYZ_pie.png"
@@ -206,10 +305,16 @@ def run_analysis(out_file: Path, input_file: Path, task_id: str):
         plt.close()
         log_message("Диаграмма сохранена как PNG")
 
-        ws_chart = wb.create_sheet("Диаграмма")
+        #  ========================================
+        # встраиваем диаграмму в Excel
+        wb = load_workbook(out_file)
+        ws_chart = wb["Диаграмма"] if "Диаграмма" in wb.sheetnames else wb.create_sheet("Диаграмма")
+
         img = Image(str(chart_path))
         img.width, img.height = 480, 480
         ws_chart.add_image(img, "B2")
+        # =========================================
+
         wb.save(out_file)
 
         log_message("Диаграмма добавлена в Excel")

@@ -2,8 +2,8 @@
   "abc_file": "backend/data/ABC_группы_январь_август.xlsx",
   "output_dir": "backend/output",
   "xyz_thresholds": {
-    "X": 60,
-    "Y": 120,
-    "Z": 180
+    "X": 30,
+    "Y": 60,
+    "Z": 90
   }
 }
