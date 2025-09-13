@@ -35,7 +35,6 @@ app.mount("/static", StaticFiles(directory="backend/static"), name="static")
 @app.get("/", response_class=HTMLResponse)
 def read_root():
     index_path = STATIC_DIR / "index.html"
-    # index_path = Path("backend/static/index.html")
     return index_path.read_text(encoding="utf-8")
 
 @app.post("/upload")
