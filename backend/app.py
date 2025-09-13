@@ -10,12 +10,16 @@ from fastapi.responses import FileResponse
 from pathlib import Path
 import uuid
 from backend.analysis import run_analysis
-
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from fastapi.responses import FileResponse
-from fastapi import UploadFile, File
+
 from fastapi import Request
+from fastapi import UploadFile, File, BackgroundTasks
+from fastapi.responses import JSONResponse
+import uuid
+from pathlib import Path
 
 
 app = FastAPI()
@@ -46,20 +50,38 @@ async def upload_excel(file: UploadFile = File(...)):
     return {"message": f"Файл {file.filename} загружен", "filename": file.filename}    
 
 
-@app.post("/analyze")
-async def analyze(request: Request, background_tasks: BackgroundTasks):
-    body = await request.json()
-    filename = body.get("filename")
-    input_path = BASE_DIR / "data" / filename
+# @app.post("/analyze")
+# async def analyze(request: Request, background_tasks: BackgroundTasks):
+#     body = await request.json()
+#     filename = body.get("filename")
+#     input_path = BASE_DIR / "data" / filename
+#
+#     task_id = str(uuid.uuid4())
+#     out_file = RESULTS_DIR / f"analysis_{task_id}.xlsx"
+#
+    # ✅ Передаём оба аргумента
+    # background_tasks.add_task(run_analysis, out_file, input_path, task_id)
+    # return {"task_id": task_id}
 
+# ==================================================
+@app.post("/analyze")
+async def analyze_file(background_tasks: BackgroundTasks,
+    file: UploadFile = File(...)) -> JSONResponse:
     task_id = str(uuid.uuid4())
+    input_path = BASE_DIR / "data" / f"input_{task_id}.xlsx"
     out_file = RESULTS_DIR / f"analysis_{task_id}.xlsx"
 
-    # ✅ Передаём оба аргумента
+    # Сохраняем загруженный файл
+    with open(input_path, "wb") as f:
+        f.write(await file.read())
+
+    # Запускаем анализ в фоне
     background_tasks.add_task(run_analysis, out_file, input_path, task_id)
 
-    return {"task_id": task_id}
+    # Возвращаем ссылку на результат
+    return JSONResponse({"result_url": f"/static/results/analysis_{task_id}.xlsx"})
 
+# ==================================================
 
 @app.get("/status/{task_id}")
 def status(task_id: str):
