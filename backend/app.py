@@ -68,7 +68,7 @@ async def upload_excel(file: UploadFile = File(...)):
 # добавлено изменение
 @app.post("/analyze")
 async def analyze_file(background_tasks: BackgroundTasks,
-    file: UploadFile = File(...)) -> JSONResponse:
+    file: UploadFile = File(...) ) -> JSONResponse:
     task_id = str(uuid.uuid4())
     input_path = BASE_DIR / "data" / f"input_{task_id}.xlsx"
     out_file = RESULTS_DIR / f"analysis_{task_id}.xlsx"
@@ -77,8 +77,11 @@ async def analyze_file(background_tasks: BackgroundTasks,
     with open(input_path, "wb") as f:
         f.write(await file.read())
 
-    # Запускаем анализ в фоне
+       # Запускаем анализ в фоне
     background_tasks.add_task(run_analysis, out_file, input_path, task_id)
+
+    # Запускаем Автоматическая очистка старых файлов в фоне
+    background_tasks.add_task(cleanup_old_files)
 
     # Возвращаем ссылку на результат
     return JSONResponse({"result_url": f"/static/results/analysis_{task_id}.xlsx"})
@@ -89,8 +92,11 @@ async def analyze_file(background_tasks: BackgroundTasks,
 def cleanup_old_files():
     now = time.time()
     for file in RESULTS_DIR.glob("analysis_*.xlsx"):
-        if now - file.stat().st_mtime > 3600:  # старше 1 часа
-            file.unlink()
+        try:
+            if now - file.stat().st_mtime > 3600:  # старше 1 часа
+                file.unlink()
+        except Exception as e:
+            print(f"Ошибка при удалении {file.name}: {e}")
 
 # добавляем статус задачи
 # @app.get("/status/{task_id}")
@@ -133,7 +139,8 @@ def download_file(task_id: str):
         return FileResponse(
             file_path,
             media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            filename=file_path.name
+            # filename=file_path.name
+            filename=f"ABCXYZ_отчет_{task_id}.xlsx"
         )
     return {"error": "Файл не найден"}
 # =======================================================
