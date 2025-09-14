@@ -66,9 +66,29 @@ async def upload_excel(file: UploadFile = File(...)):
 
 # ==================================================
 # добавлено изменение
+# @app.post("/analyze")
+# async def analyze_file(background_tasks: BackgroundTasks,
+#     file: UploadFile = File(...) ) -> JSONResponse:
+#     task_id = str(uuid.uuid4())
+#     input_path = BASE_DIR / "data" / f"input_{task_id}.xlsx"
+#     out_file = RESULTS_DIR / f"analysis_{task_id}.xlsx"
+#
+#     # Сохраняем загруженный файл
+#     with open(input_path, "wb") as f:
+#         f.write(await file.read())
+#
+#        # Запускаем анализ в фоне
+#     background_tasks.add_task(run_analysis, out_file, input_path, task_id)
+#
+#     # Запускаем Автоматическая очистка старых файлов в фоне
+#     background_tasks.add_task(cleanup_old_files)
+#
+#     # Возвращаем ссылку на результат
+#     return JSONResponse({"result_url": f"/static/results/analysis_{task_id}.xlsx"})
+# ==================================================
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++GPT
 @app.post("/analyze")
-async def analyze_file(background_tasks: BackgroundTasks,
-    file: UploadFile = File(...) ) -> JSONResponse:
+async def analyze_file(file: UploadFile = File(...)) -> JSONResponse:
     task_id = str(uuid.uuid4())
     input_path = BASE_DIR / "data" / f"input_{task_id}.xlsx"
     out_file = RESULTS_DIR / f"analysis_{task_id}.xlsx"
@@ -77,16 +97,17 @@ async def analyze_file(background_tasks: BackgroundTasks,
     with open(input_path, "wb") as f:
         f.write(await file.read())
 
-       # Запускаем анализ в фоне
-    background_tasks.add_task(run_analysis, out_file, input_path, task_id)
+    # Запускаем анализ синхронно (не фон)
+    run_analysis(out_file, input_path, task_id)
 
-    # Запускаем Автоматическая очистка старых файлов в фоне
-    background_tasks.add_task(cleanup_old_files)
+    # Чистим старые файлы после завершения анализа
+    cleanup_old_files()
 
-    # Возвращаем ссылку на результат
-    return JSONResponse({"result_url": f"/static/results/analysis_{task_id}.xlsx"})
-# ==================================================
-
+    # Возвращаем готовую ссылку
+    return JSONResponse({
+        "result_url": f"/static/results/analysis_{task_id}.xlsx"
+    })
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++GPT
 # ===========================================================
 # Добавляем фоновую задачу:Автоматическая очистка старых файлов
 def cleanup_old_files():
@@ -95,6 +116,7 @@ def cleanup_old_files():
         try:
             if now - file.stat().st_mtime > 3600:  # старше 1 часа
                 file.unlink()
+                print(f"🧹 Удалён файл: {file}")
         except Exception as e:
             print(f"Ошибка при удалении {file.name}: {e}")
 

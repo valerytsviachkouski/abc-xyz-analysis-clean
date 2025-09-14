@@ -61,16 +61,27 @@
         resultDiv.innerHTML = "⏳ Анализ выполняется...";
 
         try {
-            const response = await fetch('/analyze', {
-                method: 'POST',
-                body: formData
-            });
+<!--            const response = await fetch('/analyze', {-->
+<!--                method: 'POST',-->
+<!--                body: formData-->
+<!--            });-->
 
-            if (!response.ok) throw new Error("Ошибка при выполнении анализа");
+<!--            if (!response.ok) throw new Error("Ошибка при выполнении анализа");-->
 
-            const data = await response.json();
-            const taskId = data.task_id;
+<!--            const data = await response.json();-->
+<!--            const taskId = data.task_id;-->
+<!--             +++++++++++++++++++++++++++++++++++++++++++++++GPT   -->
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
 
+                if (!response.ok) throw new Error("Ошибка при выполнении анализа");
+
+                const data = await response.json();
+                resultDiv.innerHTML = `<p>✅ Анализ завершён. <a href="${data.result_url}" target="_blank">Скачать отчёт</a></p>`;
+
+<!--           ++++++++++++++++++++++++++++++++++++++++++++++++++++++GPT    -->
             // Проверяем статус каждые 2 секунды
             const checkStatus = async () => {
                 const statusResp = await fetch(`/status/${taskId}`);
