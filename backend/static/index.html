@@ -47,35 +47,49 @@
     <div id="result"></div>
 
     <script>
-        const form = document.getElementById('uploadForm');
-        const resultDiv = document.getElementById('result');
+    const form = document.getElementById('uploadForm');
+    const resultDiv = document.getElementById('result');
 
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const fileInput = form.querySelector('input[type="file"]');
-            const file = fileInput.files[0];
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fileInput = form.querySelector('input[type="file"]');
+        const file = fileInput.files[0];
 
-            const formData = new FormData();
-            formData.append('file', file);
+        const formData = new FormData();
+        formData.append('file', file);
 
-            resultDiv.innerHTML = "⏳ Анализ выполняется...";
+        resultDiv.innerHTML = "⏳ Анализ выполняется...";
 
-            try {
-                const response = await fetch('/analyze', {
-                    method: 'POST',
-                    body: formData
-                });
+        try {
+            const response = await fetch('/analyze', {
+                method: 'POST',
+                body: formData
+            });
 
-                if (!response.ok) throw new Error("Ошибка при выполнении анализа");
+            if (!response.ok) throw new Error("Ошибка при выполнении анализа");
 
-                const data = await response.json();
-                const taskId = data.result_url.split("analysis_")[1].split(".xlsx")[0];
-                resultDiv.innerHTML = `<p>✅ Анализ завершён. <a href="${data.result_url}" target="_blank">Скачать отчёт</a></p>`;
-            } catch (err) {
-                resultDiv.innerHTML = `<p style="color:red;">❌ ${err.message}</p>`;
-            }
-        });
-    </script>
+            const data = await response.json();
+            const taskId = data.task_id;
+
+            // Проверяем статус каждые 2 секунды
+            const checkStatus = async () => {
+                const statusResp = await fetch(`/status/${taskId}`);
+                const statusData = await statusResp.json();
+
+                if (statusData.ready) {
+                    resultDiv.innerHTML = `<p>✅ Анализ завершён. <a href="/download/${taskId}" target="_blank">Скачать отчёт</a></p>`;
+                } else {
+                    setTimeout(checkStatus, 2000);
+                }
+            };
+
+            checkStatus();
+        } catch (err) {
+            resultDiv.innerHTML = `<p style="color:red;">❌ ${err.message}</p>`;
+        }
+    });
+</script>
+
 </body>
 </html>
 

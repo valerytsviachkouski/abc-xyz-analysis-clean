@@ -93,10 +93,10 @@ def cleanup_old_files():
             file.unlink()
 
 # добавляем статус задачи
-@app.get("/status/{task_id}")
-def check_status(task_id: str):
-    file_path = RESULTS_DIR / f"analysis_{task_id}.xlsx"
-    return {"ready": file_path.exists()}
+# @app.get("/status/{task_id}")
+# def check_status(task_id: str):
+#     file_path = RESULTS_DIR / f"analysis_{task_id}.xlsx"
+#     return {"ready": file_path.exists()}
 # =================================================================
 
 @app.get("/status/{task_id}")
