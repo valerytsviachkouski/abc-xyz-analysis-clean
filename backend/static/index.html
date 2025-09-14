@@ -69,6 +69,7 @@
                 if (!response.ok) throw new Error("Ошибка при выполнении анализа");
 
                 const data = await response.json();
+                const taskId = data.result_url.split("analysis_")[1].split(".xlsx")[0];
                 resultDiv.innerHTML = `<p>✅ Анализ завершён. <a href="${data.result_url}" target="_blank">Скачать отчёт</a></p>`;
             } catch (err) {
                 resultDiv.innerHTML = `<p style="color:red;">❌ ${err.message}</p>`;

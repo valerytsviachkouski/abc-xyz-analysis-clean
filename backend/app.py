@@ -5,6 +5,7 @@
 
 # Запуск PyCharm Терминал uvicorn backend.app:app --reload
 
+import time
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.responses import FileResponse
 from pathlib import Path
@@ -64,6 +65,7 @@ async def upload_excel(file: UploadFile = File(...)):
     # return {"task_id": task_id}
 
 # ==================================================
+# добавлено изменение
 @app.post("/analyze")
 async def analyze_file(background_tasks: BackgroundTasks,
     file: UploadFile = File(...)) -> JSONResponse:
@@ -80,8 +82,22 @@ async def analyze_file(background_tasks: BackgroundTasks,
 
     # Возвращаем ссылку на результат
     return JSONResponse({"result_url": f"/static/results/analysis_{task_id}.xlsx"})
-
 # ==================================================
+
+# ===========================================================
+# Добавляем фоновую задачу:Автоматическая очистка старых файлов
+def cleanup_old_files():
+    now = time.time()
+    for file in RESULTS_DIR.glob("analysis_*.xlsx"):
+        if now - file.stat().st_mtime > 3600:  # старше 1 часа
+            file.unlink()
+
+# добавляем статус задачи
+@app.get("/status/{task_id}")
+def check_status(task_id: str):
+    file_path = RESULTS_DIR / f"analysis_{task_id}.xlsx"
+    return {"ready": file_path.exists()}
+# =================================================================
 
 @app.get("/status/{task_id}")
 def status(task_id: str):
@@ -102,12 +118,25 @@ def status(task_id: str):
 
     return {"ready": False, "error": error_tail}
 
+# @app.get("/download/{task_id}")
+# def download(task_id: str):
+#     out_file = RESULTS_DIR / f"analysis_{task_id}.xlsx"
+#     if out_file.exists():
+#      return FileResponse(out_file, filename=out_file.name)
+#     return {"error": "Файл ещё не готов или не найден"}
+
+# ======================================================
 @app.get("/download/{task_id}")
-def download(task_id: str):
-    out_file = RESULTS_DIR / f"analysis_{task_id}.xlsx"
-    if out_file.exists():
-     return FileResponse(out_file, filename=out_file.name)
-    return {"error": "Файл ещё не готов или не найден"}
+def download_file(task_id: str):
+    file_path = RESULTS_DIR / f"analysis_{task_id}.xlsx"
+    if file_path.exists():
+        return FileResponse(
+            file_path,
+            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            filename=file_path.name
+        )
+    return {"error": "Файл не найден"}
+# =======================================================
 
 
 # скачиваем диаграмму на вэб-странице
