@@ -60,9 +60,9 @@ async def upload_excel(file: UploadFile = File(...)):
 #     task_id = str(uuid.uuid4())
 #     out_file = RESULTS_DIR / f"analysis_{task_id}.xlsx"
 #
-    # ✅ Передаём оба аргумента
-    # background_tasks.add_task(run_analysis, out_file, input_path, task_id)
-    # return {"task_id": task_id}
+#     # ✅ Передаём оба аргумента
+#     background_tasks.add_task(run_analysis, out_file, input_path, task_id)
+#     return {"task_id": task_id}
 
 # ==================================================
 # добавлено изменение
@@ -86,6 +86,9 @@ async def upload_excel(file: UploadFile = File(...)):
 #     # Возвращаем ссылку на результат
 #     return JSONResponse({"result_url": f"/static/results/analysis_{task_id}.xlsx"})
 # ==================================================
+
+
+
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++GPT
 @app.post("/analyze")
 async def analyze_file(file: UploadFile = File(...)) -> JSONResponse:
@@ -108,6 +111,8 @@ async def analyze_file(file: UploadFile = File(...)) -> JSONResponse:
         "result_url": f"/static/results/analysis_{task_id}.xlsx"
     })
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++GPT
+
+
 # ===========================================================
 # Добавляем фоновую задачу:Автоматическая очистка старых файлов
 def cleanup_old_files():
