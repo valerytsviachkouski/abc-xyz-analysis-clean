@@ -80,7 +80,8 @@
                 if (!response.ok) throw new Error("Ошибка при выполнении анализа");
 
                 const data = await response.json();
-                resultDiv.innerHTML = `<p>✅ Анализ завершён. <a href="${data.result_url}" target="_blank">Скачать отчёт</a></p>`;
+<!--                resultDiv.innerHTML = `<p>✅ Анализ завершён. <a href="${data.result_url}" target="_blank">Скачать отчёт</a></p>`;-->
+                    resultDiv.innerHTML = `<p>✅ Анализ завершён. <a href="/download/${taskId}" target="_blank">Скачать отчёт</a></p>`;
 
 
 <!--           ++++++++++++++++++++++++++++++++++++++++++++++++++++++GPT    -->

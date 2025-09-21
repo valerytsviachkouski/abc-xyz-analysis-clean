@@ -152,7 +152,7 @@ def status(task_id: str):
     return {"ready": False, "error": error_tail}
 
 @app.get("/download/{task_id}")
-def download(task_id: str):
+async def download(task_id: str):
     file_path = RESULTS_DIR / f"analysis_{task_id}.xlsx"
     if file_path.exists():
         return FileResponse(file_path, filename=f"analysis_{task_id}.xlsx")
