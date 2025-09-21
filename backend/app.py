@@ -119,7 +119,7 @@ def cleanup_old_files():
     now = time.time()
     for file in RESULTS_DIR.glob("analysis_*.xlsx"):
         try:
-            if now - file.stat().st_mtime > 3600:  # старше 1 часа
+            if now - file.stat().st_mtime > 86400:  # старше 1 часа
                 file.unlink()
                 print(f"🧹 Удалён файл: {file}")
         except Exception as e:
@@ -151,25 +151,25 @@ def status(task_id: str):
 
     return {"ready": False, "error": error_tail}
 
-# @app.get("/download/{task_id}")
-# def download(task_id: str):
-#     out_file = RESULTS_DIR / f"analysis_{task_id}.xlsx"
-#     if out_file.exists():
-#      return FileResponse(out_file, filename=out_file.name)
-#     return {"error": "Файл ещё не готов или не найден"}
-
-# ======================================================
 @app.get("/download/{task_id}")
-def download_file(task_id: str):
+def download(task_id: str):
     file_path = RESULTS_DIR / f"analysis_{task_id}.xlsx"
     if file_path.exists():
-        return FileResponse(
-            file_path,
-            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            # filename=file_path.name
-            filename=f"ABCXYZ_отчет_{task_id}.xlsx"
-        )
-    return {"error": "Файл не найден"}
+        return FileResponse(file_path, filename=f"analysis_{task_id}.xlsx")
+    return JSONResponse({"error": "Файл не найден"}, status_code=404)
+
+# ======================================================
+# @app.get("/download/{task_id}")
+# def download_file(task_id: str):
+#     file_path = RESULTS_DIR / f"analysis_{task_id}.xlsx"
+#     if file_path.exists():
+#         return FileResponse(
+#             file_path,
+#             media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+#             # filename=file_path.name
+#             filename=f"ABCXYZ_отчет_{task_id}.xlsx"
+#         )
+#     return {"error": "Файл не найден"}
 # =======================================================
 
 
