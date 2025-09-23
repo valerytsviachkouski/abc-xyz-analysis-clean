@@ -1,9 +1,8 @@
-# Flask/FastAPI
+# Flask/FastAPI# Запуск PyCharm Терминал uvicorn backend.app:app --reload
 # Запуск: python -m uvicorn backend.app:app --reload --port 8000
 # Flask/FastAPI
 # Запуск с Gitpod: python -m uvicorn backend.app:app --reload --host 0.0.0.0 --port 8000
 
-# Запуск PyCharm Терминал uvicorn backend.app:app --reload
 
 from fastapi import FastAPI, BackgroundTasks, UploadFile, File
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
@@ -36,11 +35,22 @@ def read_root():
 
 
 # Очистка старых файлов
+# def cleanup_old_files():
+#     now = time.time()
+#     for file in RESULTS_DIR.glob("analysis_*.xlsx"):
+#         try:
+#             if now - file.stat().st_mtime > 86400:  # старше 1 суток
+#                 file.unlink()
+#                 print(f"🧹 Удалён файл: {file}")
+#         except Exception as e:
+#             print(f"Ошибка при удалении {file.name}: {e}")
+
+# # Очистка старых файлов (старше 1 суток) gpt
 def cleanup_old_files():
     now = time.time()
     for file in RESULTS_DIR.glob("analysis_*.xlsx"):
         try:
-            if now - file.stat().st_mtime > 86400:  # старше 1 суток
+            if now - file.stat().st_mtime > 86400:  # 24 часа
                 file.unlink()
                 print(f"🧹 Удалён файл: {file}")
         except Exception as e:
@@ -48,11 +58,32 @@ def cleanup_old_files():
 
 
 # Анализ файла
+# @app.post("/analyze")
+# async def analyze_file(background_tasks: BackgroundTasks,
+#                        file: UploadFile = File(...)) -> JSONResponse:
+#     task_id = str(uuid.uuid4())
+#
+#     input_path = UPLOAD_DIR / f"input_{task_id}.xlsx"
+#     out_file = RESULTS_DIR / f"analysis_{task_id}.xlsx"
+#
+#     # Сохраняем загруженный файл
+#     with open(input_path, "wb") as f:
+#         f.write(await file.read())
+#
+#     # Запускаем анализ в фоне
+#     background_tasks.add_task(run_analysis, out_file, input_path, task_id)
+#
+#     # Запускаем очистку старых файлов в фоне
+#     background_tasks.add_task(cleanup_old_files)
+#
+#     return {"task_id": task_id}
+
+# gpt
 @app.post("/analyze")
 async def analyze_file(background_tasks: BackgroundTasks,
-                       file: UploadFile = File(...)) -> JSONResponse:
+    file: UploadFile = File(...)
+) -> JSONResponse:
     task_id = str(uuid.uuid4())
-
     input_path = UPLOAD_DIR / f"input_{task_id}.xlsx"
     out_file = RESULTS_DIR / f"analysis_{task_id}.xlsx"
 
@@ -63,10 +94,15 @@ async def analyze_file(background_tasks: BackgroundTasks,
     # Запускаем анализ в фоне
     background_tasks.add_task(run_analysis, out_file, input_path, task_id)
 
-    # Запускаем очистку старых файлов в фоне
+    # Запускаем автоматическую очистку старых файлов в фоне
     background_tasks.add_task(cleanup_old_files)
 
-    return {"task_id": task_id}
+    # Возвращаем ссылку на результат + taskId
+    return JSONResponse({
+        "taskId": task_id,
+        "result_url": f"/static/results/analysis_{task_id}.xlsx"
+    })
+
 
 
 # Проверка готовности
@@ -76,12 +112,22 @@ def status(task_id: str):
     return {"ready": out_file.exists()}
 
 
-# Скачивание результата
+# # Скачивание результата
+# @app.get("/download/{task_id}")
+# def download_file(task_id: str):
+#     out_file = RESULTS_DIR / f"analysis_{task_id}.xlsx"
+#     if out_file.exists():
+#         return FileResponse(out_file, filename=out_file.name)
+#     return {"error": "Файл ещё не готов или не найден"}
+
+# gpt
 @app.get("/download/{task_id}")
-def download_file(task_id: str):
-    out_file = RESULTS_DIR / f"analysis_{task_id}.xlsx"
-    if out_file.exists():
-        return FileResponse(out_file, filename=out_file.name)
-    return {"error": "Файл ещё не готов или не найден"}
-
-
+async def download_file(task_id: str):
+    file_path = RESULTS_DIR / f"analysis_{task_id}.xlsx"
+    if file_path.exists():
+        return FileResponse(
+            file_path,
+            filename=f"analysis_{task_id}.xlsx",
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    return JSONResponse({"error": "Файл не найден"}, status_code=404)
