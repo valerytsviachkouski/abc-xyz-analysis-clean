@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from pathlib import Path
 import json
+import gc
 from openpyxl.drawing.image import Image
 from openpyxl.styles import Font, Alignment
 from openpyxl.utils import get_column_letter
@@ -22,16 +23,18 @@ os.environ['TCL_LIBRARY'] = r'C:\Program Files\Python313\tcl\tcl8.6'
 def log_message(msg: str):
     log_file = Path(__file__).resolve().parent / "error.log"
     with open(log_file, "a", encoding="utf-8") as f:
-        f.write(f"[INFO] {msg}\n")
+        # f.write(f"[INFO] {msg}\n")
+        f.write(f"[{datetime.now().isoformat()}] {msg}\n")
 
 def run_analysis(out_file: Path, input_file: Path, task_id: str):
     try:
+        start = datetime.now()
         log_message("=== Запуск анализа ===")
 
-        def save_history(task_id: str, input_file: Path, out_file: Path):
-            history_path = Path(__file__).resolve().parent / "history.log"
-            with open(history_path, "a", encoding="utf-8") as f:
-                f.write(f"{datetime.now().isoformat()} | {task_id} | {input_file.name} → {out_file.name}\n")
+        # def save_history(task_id: str, input_file: Path, out_file: Path):
+        #     history_path = Path(__file__).resolve().parent / "history.log"
+        #     with open(history_path, "a", encoding="utf-8") as f:
+        #         f.write(f"{datetime.now().isoformat()} | {task_id} | {input_file.name} → {out_file.name}\n")
 
         # === 1. Загружаем конфиг ===
         BASE_DIR = Path(__file__).resolve().parent.parent
@@ -44,12 +47,12 @@ def run_analysis(out_file: Path, input_file: Path, task_id: str):
         out_dir = out_file.parent
         xyz_thresholds = config["xyz_thresholds"]
 
-        # period_days = config["period_days"]
+        #period_days = config["period_days"]
         log_message(f"Определено X Y Z: {xyz_thresholds}")
         log_message("Конфиг загружен")
 
         # период оборачиваемости должен равняться количеству столбцов исходной таблицы без столбца Наименование
-        log_message(f"Определено X Y Z: {xyz_thresholds}")
+        # log_message(f"Определено X Y Z: {xyz_thresholds}")
 
         # пути промежуточных таблиц
 
@@ -58,8 +61,16 @@ def run_analysis(out_file: Path, input_file: Path, task_id: str):
         out_path_stock = out_dir / "Исходная таблица_остаток.xlsx"
 
         # === 2. Трансформация исходной таблицы ===
-        df = pd.read_excel(input_file, header=None)
+        # df = pd.read_excel(input_file, header=None)
         log_message("Исходная таблица загружена")
+
+        # -----------copilot----------------------------------------
+        try:
+            df = pd.read_excel(input_file, header=None)
+        except Exception as e:
+            log_message(f"❌ Ошибка чтения Excel: {e}")
+            return
+        # --------------copilot---------------------------------------
 
         # период оборачиваемости должен равняться количеству столбцов исходной таблицы без столбца Наименование
         period_days = df.shape[1] - 1  # Количество столбцов минус 1
@@ -96,6 +107,8 @@ def run_analysis(out_file: Path, input_file: Path, task_id: str):
         avg_values = df_stock_num.mean(axis=1).tolist()
         df_stock.insert(df_stock.shape[1], "Средний", avg_values)
 
+        df_stock["Средний"] = df_stock["Средний"].astype("object")
+
         if df_stock.shape[0] > 0:
             df_stock.at[0, "Средний"] = "Средний"
         if df_stock.shape[0] > 1:
@@ -105,15 +118,31 @@ def run_analysis(out_file: Path, input_file: Path, task_id: str):
         df_stock.to_excel(out_path_stock, header=False, index=False)
         log_message("Файлы 'отгрузка' и 'остаток' сохранены")
 
+        # ------------copilot------------------------------
+        try:
+            ship = pd.read_excel(out_path_ship, header=0)
+            stock = pd.read_excel(out_path_stock, header=0)
+            abc = pd.read_excel(abc_file)
+        except Exception as e:
+            log_message(f"❌ Ошибка чтения промежуточных файлов: {e}")
+            return
+        # -------------copilot----------------------------
+
         # === 4. ABC-XYZ-анализ ===
-        ship = pd.read_excel(out_path_ship, header=0)
-        stock = pd.read_excel(out_path_stock, header=0)
-        abc = pd.read_excel(abc_file)
+        # ship = pd.read_excel(out_path_ship, header=0)
+        # stock = pd.read_excel(out_path_stock, header=0)
+        # abc = pd.read_excel(abc_file)
 
         ship = ship[pd.to_numeric(ship["Всего"], errors="coerce").notna()]
         stock = stock[pd.to_numeric(stock["Средний"], errors="coerce").notna()]
         ship["Всего"] = pd.to_numeric(ship["Всего"], errors="coerce")
         stock["Средний"] = pd.to_numeric(stock["Средний"], errors="coerce")
+
+        # ------------------------------------copilot-----------------
+        if ship.empty or stock.empty:
+            log_message("❌ ship или stock пусты после фильтрации")
+            return
+        #-----------------------------copilot------------------------
 
         df = pd.merge(
             ship[["Наименование", "Всего"]],
@@ -121,6 +150,13 @@ def run_analysis(out_file: Path, input_file: Path, task_id: str):
             on="Наименование",
             how="inner"
         )
+
+        # ---------------------------------copilot---------------------
+        if "Наименование" not in df.columns:
+            log_message("❌ Нет столбца 'Наименование' после объединения")
+            return
+        # ----------copilot------------------------------------
+
 
         # добавляем ABC-группу
         df = pd.merge(df, abc[["Наименование", "Группа ABC"]], on="Наименование", how="left")
@@ -222,7 +258,7 @@ def run_analysis(out_file: Path, input_file: Path, task_id: str):
         df["Всего отгрузка,кг"] = df["Всего отгрузка,кг"].astype(float).round(2)
         df["Средний остаток,кг"] = df["Средний остаток,кг"].astype(float).round(2)
 
-        save_history(task_id, input_file, out_file)
+        # save_history(task_id, input_file, out_file)
 
         wb = load_workbook(out_file)
         ws = wb["Сводная матрица"]
@@ -333,6 +369,11 @@ def run_analysis(out_file: Path, input_file: Path, task_id: str):
 
         log_message("Диаграмма добавлена в Excel")
         log_message("=== Анализ успешно завершён ===")
+        # -------------copilot-------------------
+        log_message(f"✅ Анализ завершён: {out_file.name}")
+        log_message(f"⏱️ Время выполнения: {(datetime.now() - start).total_seconds():.2f} сек")
+        gc.collect()
+    #     --------copilot------------------------------
 
     except Exception as e:
         error_log = Path(__file__).resolve().parent / "error.log"

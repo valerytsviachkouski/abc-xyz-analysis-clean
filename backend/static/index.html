@@ -1,3 +1,101 @@
+<!--<!DOCTYPE html>-->
+<!--<html lang="ru">-->
+<!--<head>-->
+<!--    <meta charset="UTF-8">-->
+<!--    <title>ABC-XYZ Анализ</title>-->
+<!--    <style>-->
+<!--        body {-->
+<!--            font-family: Arial, sans-serif;-->
+<!--            padding: 40px;-->
+<!--            background-color: #f4f4f4;-->
+<!--        }-->
+<!--        h1 {-->
+<!--            color: #333;-->
+<!--        }-->
+<!--        form {-->
+<!--            background: white;-->
+<!--            padding: 20px;-->
+<!--            border-radius: 8px;-->
+<!--            box-shadow: 0 0 10px rgba(0,0,0,0.1);-->
+<!--            max-width: 500px;-->
+<!--        }-->
+<!--        input[type="file"] {-->
+<!--            margin-bottom: 20px;-->
+<!--        }-->
+<!--        button {-->
+<!--            background-color: #0078D4;-->
+<!--            color: white;-->
+<!--            padding: 10px 20px;-->
+<!--            border: none;-->
+<!--            border-radius: 4px;-->
+<!--            cursor: pointer;-->
+<!--        }-->
+<!--        button:hover {-->
+<!--            background-color: #005fa3;-->
+<!--        }-->
+<!--        #result {-->
+<!--            margin-top: 20px;-->
+<!--        }-->
+<!--    </style>-->
+<!--</head>-->
+<!--<body>-->
+<!--    <h1>Загрузка Excel-файла для ABC-XYZ анализа</h1>-->
+<!--    <form id="uploadForm">-->
+<!--        <input type="file" name="file" accept=".xlsx" required>-->
+<!--        <button type="submit">Запустить анализ</button>-->
+<!--    </form>-->
+<!--    <div id="result"></div>-->
+
+<!--    <script>-->
+<!--    const form = document.getElementById('uploadForm');-->
+<!--    const resultDiv = document.getElementById('result');-->
+
+<!--    form.addEventListener('submit', async (e) => {-->
+<!--        e.preventDefault();-->
+<!--        const fileInput = form.querySelector('input[type="file"]');-->
+<!--        const file = fileInput.files[0];-->
+
+<!--        const formData = new FormData();-->
+<!--        formData.append('file', file);-->
+
+<!--        resultDiv.innerHTML = "⏳ Анализ выполняется...";-->
+
+<!--        try {-->
+<!--            const response = await fetch('/analyze', {-->
+<!--                method: 'POST',-->
+<!--                body: formData-->
+<!--            });-->
+
+<!--            if (!response.ok) throw new Error("Ошибка при выполнении анализа");-->
+
+<!--            const data = await response.json();-->
+<!--            const taskId = data.task_id;-->
+
+<!--            // Проверяем статус каждые 2 секунды-->
+<!--            const checkStatus = async () => {-->
+<!--                const statusResp = await fetch(`/status/${taskId}`);-->
+<!--                const statusData = await statusResp.json();-->
+
+<!--                if (statusData.ready) {-->
+<!--                    resultDiv.innerHTML = `<p>✅ Анализ завершён. <a href="/download/${taskId}" target="_blank">Скачать отчёт</a></p>`;-->
+<!--                } else {-->
+<!--                    setTimeout(checkStatus, 2000);-->
+<!--                }-->
+<!--            };-->
+
+<!--            checkStatus();-->
+<!--        } catch (err) {-->
+<!--            resultDiv.innerHTML = `<p style="color:red;">❌ ${err.message}</p>`;-->
+<!--        }-->
+<!--    });-->
+<!--    </script>-->
+<!--</body>-->
+<!--</html>-->
+
+
+
+
+<!--copilot-->
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -36,6 +134,10 @@
         #result {
             margin-top: 20px;
         }
+        #spinner {
+            display: none;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -44,21 +146,36 @@
         <input type="file" name="file" accept=".xlsx" required>
         <button type="submit">Запустить анализ</button>
     </form>
+    <div id="spinner">
+        <p>⏳ Пожалуйста, подождите...</p>
+    </div>
     <div id="result"></div>
 
     <script>
     const form = document.getElementById('uploadForm');
     const resultDiv = document.getElementById('result');
+    const spinner = document.getElementById('spinner');
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const fileInput = form.querySelector('input[type="file"]');
         const file = fileInput.files[0];
 
+        if (!file) {
+            resultDiv.innerHTML = `<p style="color:red;">❌ Выберите файл</p>`;
+            return;
+        }
+
+        if (file.size > 10 * 1024 * 1024) {
+            resultDiv.innerHTML = `<p style="color:red;">❌ Файл слишком большой (макс. 10 МБ)</p>`;
+            return;
+        }
+
         const formData = new FormData();
         formData.append('file', file);
 
-        resultDiv.innerHTML = "⏳ Анализ выполняется...";
+        spinner.style.display = "block";
+        resultDiv.innerHTML = "";
 
         try {
             const response = await fetch('/analyze', {
@@ -71,20 +188,38 @@
             const data = await response.json();
             const taskId = data.task_id;
 
-            // Проверяем статус каждые 2 секунды
-            const checkStatus = async () => {
-                const statusResp = await fetch(`/status/${taskId}`);
-                const statusData = await statusResp.json();
+            let attempts = 0;
+            const maxAttempts = 30;
 
-                if (statusData.ready) {
-                    resultDiv.innerHTML = `<p>✅ Анализ завершён. <a href="/download/${taskId}" target="_blank">Скачать отчёт</a></p>`;
-                } else {
-                    setTimeout(checkStatus, 2000);
+            const checkStatus = async () => {
+                if (attempts++ > maxAttempts) {
+                    spinner.style.display = "none";
+                    resultDiv.innerHTML = `<p style="color:red;">⏱️ Время ожидания истекло. Попробуйте позже.</p>`;
+                    return;
+                }
+
+                try {
+                    const statusResp = await fetch(`/status/${taskId}`);
+                    if (!statusResp.ok) throw new Error("Ошибка при проверке статуса");
+
+                    const statusData = await statusResp.json();
+
+                    if (statusData.ready) {
+                        spinner.style.display = "none";
+                        resultDiv.innerHTML = `<p>✅ Анализ завершён. <a href="/download/${taskId}" target="_blank">Скачать отчёт</a></p>`;
+                        form.reset();
+                    } else {
+                        setTimeout(checkStatus, 2000);
+                    }
+                } catch (err) {
+                    spinner.style.display = "none";
+                    resultDiv.innerHTML = `<p style="color:red;">❌ ${err.message}</p>`;
                 }
             };
 
             checkStatus();
         } catch (err) {
+            spinner.style.display = "none";
             resultDiv.innerHTML = `<p style="color:red;">❌ ${err.message}</p>`;
         }
     });
@@ -92,64 +227,6 @@
 </body>
 </html>
 
-<!--<!DOCTYPE html>-->
-<!--<html lang="ru">-->
-<!--<head>-->
-<!--  <meta charset="UTF-8">-->
-<!--  <title>ABC-XYZ Анализ</title>-->
-<!--  <style>-->
-<!--    body { font-family: Arial, sans-serif; padding: 40px; background: #f4f4f4; }-->
-<!--    h1 { color: #333; }-->
-<!--    form {-->
-<!--      background: white; padding: 20px; border-radius: 8px;-->
-<!--      box-shadow: 0 0 10px rgba(0,0,0,0.1); max-width: 500px;-->
-<!--    }-->
-<!--    button {-->
-<!--      background: #0078D4; color: white; padding: 10px 20px;-->
-<!--      border: none; border-radius: 4px; cursor: pointer;-->
-<!--    }-->
-<!--    button:hover { background: #005fa3; }-->
-<!--    #result { margin-top: 20px; }-->
-<!--  </style>-->
-<!--</head>-->
-<!--<body>-->
-<!--  <h1>Загрузка Excel-файла для анализа</h1>-->
-<!--  <form id="uploadForm">-->
-<!--    <input type="file" name="file" accept=".xlsx" required>-->
-<!--    <button type="submit">Запустить анализ</button>-->
-<!--  </form>-->
-<!--  <div id="result"></div>-->
-
-<!--  <script>-->
-<!--    const form = document.getElementById('uploadForm');-->
-<!--    const resultDiv = document.getElementById('result');-->
-
-<!--    form.addEventListener('submit', async (e) => {-->
-<!--      e.preventDefault();-->
-<!--      const fileInput = form.querySelector('input[type="file"]');-->
-<!--      if (!fileInput.files.length) return;-->
-
-<!--      const formData = new FormData();-->
-<!--      formData.append('file', fileInput.files[0]);-->
-
-<!--      resultDiv.innerHTML = "⏳ Выполняется анализ...";-->
-
-<!--      try {-->
-<!--        const response = await fetch('/analyze', { method: 'POST', body: formData });-->
-<!--        if (!response.ok) throw new Error("Ошибка при выполнении анализа");-->
-
-<!--        const data = await response.json();-->
-<!--        resultDiv.innerHTML = `-->
-<!--          ✅ Анализ завершён.<br>-->
-<!--          <a href="${data.result_url}" target="_blank">Скачать отчёт</a>-->
-<!--        `;-->
-<!--      } catch (err) {-->
-<!--        resultDiv.innerHTML = `<p style="color:red;">❌ ${err.message}</p>`;-->
-<!--      }-->
-<!--    });-->
-<!--  </script>-->
-<!--</body>-->
-<!--</html>-->
 
 
 

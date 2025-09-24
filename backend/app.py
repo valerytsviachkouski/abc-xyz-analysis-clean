@@ -10,6 +10,9 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 import uuid
 import time
+import aiofiles
+import asyncio
+import gc
 
 from backend.analysis import run_analysis
 
@@ -26,13 +29,20 @@ RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 # Раздаём /static
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
+# ---------copilot---------------------------------------------------------
+@app.middleware("http")
+async def log_requests(request, call_next):
+    print(f"📥 {request.method} {request.url}")
+    response = await call_next(request)
+    print(f"📤 {response.status_code}")
+    return response
+# --------------------copilot--------------------------------------------
 
 # Главная страница
 @app.get("/", response_class=HTMLResponse)
 def read_root():
     index_path = BASE_DIR / "static" / "index.html"
     return index_path.read_text(encoding="utf-8")
-
 
 # Очистка старых файлов
 def cleanup_old_files():
@@ -45,64 +55,33 @@ def cleanup_old_files():
         except Exception as e:
             print(f"Ошибка при удалении {file.name}: {e}")
 
-# # Очистка старых файлов (старше 1 суток) gpt
-# def cleanup_old_files():
-#     now = time.time()
-#     for file in RESULTS_DIR.glob("analysis_*.xlsx"):
-#         try:
-#             if now - file.stat().st_mtime > 86400:  # 24 часа
-#                 file.unlink()
-#                 print(f"🧹 Удалён файл: {file}")
-#         except Exception as e:
-#             print(f"Ошибка при удалении {file.name}: {e}")
-
-
 # Анализ файла
 @app.post("/analyze")
 async def analyze_file(background_tasks: BackgroundTasks,
                        file: UploadFile = File(...)) -> JSONResponse:
     task_id = str(uuid.uuid4())
-
     input_path = UPLOAD_DIR / f"input_{task_id}.xlsx"
     out_file = RESULTS_DIR / f"analysis_{task_id}.xlsx"
 
-    # Сохраняем загруженный файл
-    with open(input_path, "wb") as f:
-        f.write(await file.read())
+    # -------------------copilot---------------------------------------
+    async with aiofiles.open(input_path, "wb") as f:
+        await f.write(await file.read())
 
-    # Запускаем анализ в фоне
-    background_tasks.add_task(run_analysis, out_file, input_path, task_id)
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, run_analysis, out_file, input_path, task_id)
+    # ----------------copilot----------------------------------------------
+
+    # # Сохраняем загруженный файл
+    # with open(input_path, "wb") as f:
+    #     f.write(await file.read())
+    #
+    # # Запускаем анализ в фоне
+    # background_tasks.add_task(run_analysis, out_file, input_path, task_id)
 
     # Запускаем очистку старых файлов в фоне
     background_tasks.add_task(cleanup_old_files)
 
     return {"task_id": task_id}
-
-# gpt
-# @app.post("/analyze")
-# async def analyze_file(background_tasks: BackgroundTasks,
-#     file: UploadFile = File(...)
-# ) -> JSONResponse:
-#     task_id = str(uuid.uuid4())
-#     input_path = UPLOAD_DIR / f"input_{task_id}.xlsx"
-#     out_file = RESULTS_DIR / f"analysis_{task_id}.xlsx"
-#
-#     # Сохраняем загруженный файл
-#     with open(input_path, "wb") as f:
-#         f.write(await file.read())
-#
-#     # Запускаем анализ в фоне
-#     background_tasks.add_task(run_analysis, out_file, input_path, task_id)
-#
-#     # Запускаем автоматическую очистку старых файлов в фоне
-#     background_tasks.add_task(cleanup_old_files)
-#
-#     # Возвращаем ссылку на результат + taskId
-#     return JSONResponse({
-#         "taskId": task_id,
-#         "result_url": f"/static/results/analysis_{task_id}.xlsx"
-#     })
-
 
 
 # Проверка готовности
@@ -120,14 +99,3 @@ def download_file(task_id: str):
         return FileResponse(out_file, filename=out_file.name)
     return {"error": "Файл ещё не готов или не найден"}
 
-# gpt
-# @app.get("/download/{task_id}")
-# async def download_file(task_id: str):
-#     file_path = RESULTS_DIR / f"analysis_{task_id}.xlsx"
-#     if file_path.exists():
-#         return FileResponse(
-#             file_path,
-#             filename=f"analysis_{task_id}.xlsx",
-#             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-#         )
-#     return JSONResponse({"error": "Файл не найден"}, status_code=404)
