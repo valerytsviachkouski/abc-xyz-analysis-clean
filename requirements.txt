@@ -5,3 +5,5 @@ openpyxl
 matplotlib
 python-multipart
 jinja2
+aiofiles
+gc

@@ -12,7 +12,7 @@ import uuid
 import time
 import aiofiles
 import asyncio
-import gc
+
 
 from backend.analysis import run_analysis
 
