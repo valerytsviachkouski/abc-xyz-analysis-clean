@@ -36,10 +36,9 @@ Thumbs.db
 .gitpod.yml
 
 # Папки с результатами анализа
-backend/static/results
-backend/output/
-backend/data/Исходная таблица*
-backend/data/ABC_группы.xlsx
+
+
+
 backend/history.log
 backend/error.log
 
