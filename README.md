@@ -13,30 +13,34 @@
    git clone https://github.com/valerytsviachkouski/abc-xyz-analysis-clean.git
    cd abc-xyz-analysis-clean
 
-Создайте виртуальное окружение и установите зависимости:
+   
+2.  Создайте виртуальное окружение и установите зависимости:
 python -m venv .venv
 source .venv/bin/activate  # или .venv\\Scripts\\activate для Windows
 pip install -r requirements.txt
- 
+
 Запустите сервер:
 uvicorn backend.app:app --reload
 
-Перейдите в браузере на: http://localhost:8000
-
-🌐 Деплой на Render
+Деплой на Render
+>>>>>>> 4e5dd9c3c947bdb58e1e5e0cc1c96b2520ca1eea
 Build Command: pip install -r requirements.txt
 Start Command: uvicorn backend.app:app --host 0.0.0.0 --port $PORT
 Python Version: 3.11
 Репозиторий: abc-xyz-analysis-clean
 
-🔌 API Эндпоинты
+
+API Эндпоинты
+>>>>>>> 4e5dd9c3c947bdb58e1e5e0cc1c96b2520ca1eea
 Метод	URL	Описание
 GET	/	HTML-страница с формой загрузки
 POST	/analyze	Загружает Excel-файл и запускает анализ
 GET	/status/{task_id}	Проверяет готовность результата
 GET	/download/{task_id}	Скачивает готовый Excel-отчёт
 
-Структура проектаЖ
+
+Структура проекта
+>>>>>>> 4e5dd9c3c947bdb58e1e5e0cc1c96b2520ca1eea
 backend/
 ├── app.py              # FastAPI сервер
 ├── analysis.py         # Логика обработки Excel-файлов
@@ -48,7 +52,8 @@ backend/
 ├── config.json         # Настройки анализа
 
 
-🛠️ Зависимости
+Зависимости
+>>>>>>> 4e5dd9c3c947bdb58e1e5e0cc1c96b2520ca1eea
 FastAPI
 Uvicorn
 Pandas
@@ -57,4 +62,8 @@ Matplotlib
 Aiofiles
 Python-Multipart
 Jinja2
+
 Устанавливаются через requirements.txt.
+
+
+>>>>>>> 4e5dd9c3c947bdb58e1e5e0cc1c96b2520ca1eea
