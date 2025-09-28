@@ -36,10 +36,11 @@ Thumbs.db
 .gitpod.yml
 
 # Папки с результатами анализа
-
-
-
 backend/history.log
 backend/error.log
+
+# Локальный скрипт автоматизации
+run_analysis.py
+scripts/run_analysis.py
 
 

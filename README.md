@@ -38,6 +38,28 @@ POST	/analyze	Загружает Excel-файл и запускает анали
 GET	/status/{task_id}	Проверяет готовность результата
 GET	/download/{task_id}	Скачивает готовый Excel-отчёт
 
+--
+
+## 📡 Примеры curl-запросов
+
+### 1. 📤 Загрузка Excel-файла и запуск анализа
+```bash
+curl -v -F "file=@D:\Каштан\Анализ ГП на складе 2025г\ABC_XYZ анализ\Исходная таблица ИЮНЬ-АВГУСТ 25.xlsx" https://abc-xyz-analysis-clean.onrender.com/analyze
+
+
+curl -X POST https://abc-xyz-analysis-clean.onrender.com/analyze \
+  -F "file=@backend/data/ABC_группы_январь_август.xlsx"
+Ответ будет содержать task_id например:"task_id": "abc123xyz"
+
+⏱️ Проверка статуса задачи
+curl https://abc-xyz-analysis-clean.onrender.com/status/abc123xyz
+Ответ:"status": "completed"
+
+Скачивание готового отчёта
+curl -O https://abc-xyz-analysis-clean.onrender.com/download/abc123xyz
+Файл будет сохранён как report_abc123xyz.xlsx
+
+
 
 Структура проекта
 >>>>>>> 4e5dd9c3c947bdb58e1e5e0cc1c96b2520ca1eea
