@@ -335,11 +335,19 @@ def run_analysis(out_file: Path, input_file: Path, task_id: str):
         weights = df_full.groupby("ABC_XYZ")["Всего отгрузка,кг"].sum()
         weights_percent = (weights / total_weight * 100).round(2)
 
+
+
         xyz_info = (
             f"X ≤ {xyz_thresholds['X']} дн., "
             f"Y ≤ {xyz_thresholds['Y']} дн., "
             f"Z ≤ {xyz_thresholds['Z']} дн."
         )
+
+        period_name = extract_period_from_filename(input_file)
+        if period_name == "Период не указан":
+            log_message("⚠️ Не удалось извлечь период из имени файла. Используется fallback.")
+        log_message(f"📅 Период анализа: {period_name}")
+
         # горизонтальная столбчатая диаграмма
         weights_percent.sort_values().plot.barh(
             figsize=(10, 8),
@@ -348,10 +356,8 @@ def run_analysis(out_file: Path, input_file: Path, task_id: str):
         )
         plt.xlabel("Доля отгрузки, %")
         # plt.title(f"ABC-XYZ анализ январь_август 25\n{xyz_info}\nПериод: {period_days}", fontsize=11)
-        period_name = extract_period_from_filename(input_file)
-        plt.title(f"ABC-XYZ анализ {period_name}\n{xyz_info}\nПериод: {period_days}", fontsize=11)
-        log_message(f"📅 Период анализа: {period_name}")
 
+        plt.title(f"ABC-XYZ анализ {period_name}\n{xyz_info}\nПериод: {period_days}", fontsize=11)
         plt.tight_layout()
 
         chart_path = out_dir / f"ABC_XYZ_график_{period_name}.png"
