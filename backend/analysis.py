@@ -5,13 +5,14 @@ import os
 import traceback
 import pandas as pd
 import matplotlib
+import json
+import gc
+import re
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from datetime import datetime
 from pathlib import Path
-import json
-import gc
 from openpyxl.drawing.image import Image
 from openpyxl.styles import Font, Alignment
 from openpyxl.utils import get_column_letter
@@ -20,21 +21,26 @@ from openpyxl.styles import Font, PatternFill
 
 os.environ['TCL_LIBRARY'] = r'C:\Program Files\Python313\tcl\tcl8.6'
 
+
+
+def extract_period_from_filename(file_path: Path) -> str:
+    """
+    Извлекает наименование периода из имени файла.
+    Пример: 'Исходная таблица ЯНВАРЬ-АВГУСТ 25.xlsx' → 'ЯНВАРЬ-АВГУСТ 25'
+    """
+    match = re.search(r"Исходная таблица (.+?)\.xlsx", file_path.name, re.IGNORECASE)
+    return match.group(1) if match else "Период не указан"
+
+
 def log_message(msg: str):
     log_file = Path(__file__).resolve().parent / "error.log"
     with open(log_file, "a", encoding="utf-8") as f:
-        # f.write(f"[INFO] {msg}\n")
         f.write(f"[{datetime.now().isoformat()}] {msg}\n")
 
 def run_analysis(out_file: Path, input_file: Path, task_id: str):
     try:
         start = datetime.now()
         log_message("=== Запуск анализа ===")
-
-        # def save_history(task_id: str, input_file: Path, out_file: Path):
-        #     history_path = Path(__file__).resolve().parent / "history.log"
-        #     with open(history_path, "a", encoding="utf-8") as f:
-        #         f.write(f"{datetime.now().isoformat()} | {task_id} | {input_file.name} → {out_file.name}\n")
 
         # === 1. Загружаем конфиг ===
         BASE_DIR = Path(__file__).resolve().parent.parent
@@ -127,11 +133,6 @@ def run_analysis(out_file: Path, input_file: Path, task_id: str):
             log_message(f"❌ Ошибка чтения промежуточных файлов: {e}")
             return
         # -------------copilot----------------------------
-
-        # === 4. ABC-XYZ-анализ ===
-        # ship = pd.read_excel(out_path_ship, header=0)
-        # stock = pd.read_excel(out_path_stock, header=0)
-        # abc = pd.read_excel(abc_file)
 
         ship = ship[pd.to_numeric(ship["Всего"], errors="coerce").notna()]
         stock = stock[pd.to_numeric(stock["Средний"], errors="coerce").notna()]
@@ -258,7 +259,6 @@ def run_analysis(out_file: Path, input_file: Path, task_id: str):
         df["Всего отгрузка,кг"] = df["Всего отгрузка,кг"].astype(float).round(2)
         df["Средний остаток,кг"] = df["Средний остаток,кг"].astype(float).round(2)
 
-        # save_history(task_id, input_file, out_file)
 
         wb = load_workbook(out_file)
         ws = wb["Сводная матрица"]
@@ -347,10 +347,14 @@ def run_analysis(out_file: Path, input_file: Path, task_id: str):
             edgecolor="black"
         )
         plt.xlabel("Доля отгрузки, %")
-        plt.title(f"ABC-XYZ анализ январь_август 25\n{xyz_info}\nПериод: {period_days}", fontsize=11)
+        # plt.title(f"ABC-XYZ анализ январь_август 25\n{xyz_info}\nПериод: {period_days}", fontsize=11)
+        period_name = extract_period_from_filename(input_file)
+        plt.title(f"ABC-XYZ анализ {period_name}\n{xyz_info}\nПериод: {period_days}", fontsize=11)
+        log_message(f"📅 Период анализа: {period_name}")
+
         plt.tight_layout()
 
-        chart_path = out_dir / "ABC_XYZ_pie.png"
+        chart_path = out_dir / f"ABC_XYZ_график_{period_name}.png"
         plt.savefig(chart_path, dpi=300)
         plt.close()
         log_message("Диаграмма сохранена как PNG")
