@@ -59,6 +59,8 @@ def cleanup_old_files():
 @app.post("/analyze")
 async def analyze_file(background_tasks: BackgroundTasks,
                        file: UploadFile = File(...)) -> JSONResponse:
+    original_filename = Path(file.filename)
+
     task_id = str(uuid.uuid4())
     input_path = UPLOAD_DIR / f"input_{task_id}.xlsx"
     out_file = RESULTS_DIR / f"analysis_{task_id}.xlsx"
@@ -68,15 +70,9 @@ async def analyze_file(background_tasks: BackgroundTasks,
         await f.write(await file.read())
 
     loop = asyncio.get_event_loop()
-    loop.run_in_executor(None, run_analysis, out_file, input_path, task_id)
+    loop.run_in_executor(None, run_analysis, out_file, input_path, task_id, original_filename)
     # ----------------copilot----------------------------------------------
 
-    # # Сохраняем загруженный файл
-    # with open(input_path, "wb") as f:
-    #     f.write(await file.read())
-    #
-    # # Запускаем анализ в фоне
-    # background_tasks.add_task(run_analysis, out_file, input_path, task_id)
 
     # Запускаем очистку старых файлов в фоне
     background_tasks.add_task(cleanup_old_files)

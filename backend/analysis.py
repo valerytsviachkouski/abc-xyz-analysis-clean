@@ -18,9 +18,9 @@ from openpyxl.styles import Font, Alignment
 from openpyxl.utils import get_column_letter
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill
+from openpyxl.styles import Border, Side
 
 os.environ['TCL_LIBRARY'] = r'C:\Program Files\Python313\tcl\tcl8.6'
-
 
 
 def extract_period_from_filename(file_path: Path) -> str:
@@ -37,7 +37,9 @@ def log_message(msg: str):
     with open(log_file, "a", encoding="utf-8") as f:
         f.write(f"[{datetime.now().isoformat()}] {msg}\n")
 
-def run_analysis(out_file: Path, input_file: Path, task_id: str):
+
+def run_analysis(out_file: Path, input_file: Path, task_id: str, original_filename: Path):
+# def run_analysis(out_file: Path, input_file: Path, task_id: str):
     try:
         start = datetime.now()
         log_message("=== Запуск анализа ===")
@@ -158,7 +160,6 @@ def run_analysis(out_file: Path, input_file: Path, task_id: str):
             return
         # ----------copilot------------------------------------
 
-
         # добавляем ABC-группу
         df = pd.merge(df, abc[["Наименование", "Группа ABC"]], on="Наименование", how="left")
 
@@ -259,16 +260,6 @@ def run_analysis(out_file: Path, input_file: Path, task_id: str):
         df["Всего отгрузка,кг"] = df["Всего отгрузка,кг"].astype(float).round(2)
         df["Средний остаток,кг"] = df["Средний остаток,кг"].astype(float).round(2)
 
-
-        wb = load_workbook(out_file)
-        ws = wb["Сводная матрица"]
-        start_row = ws.max_row + 2
-
-        ws.cell(row=start_row, column=1).value = "A – номенклатурные позиции УК, обеспечивающие 80% суммы маржинальной прибыли по факту продаж за 1 полугодие 2025г."
-        ws.cell(row=start_row + 1, column=1).value = "B -номенклатурные позиции УК, обеспечивающие 15% суммы маржинальной прибыли по факту продаж за 1 полугодие 2025г."
-        ws.cell(row=start_row + 2, column=1).value = "C -номенклатурные позиции УК, обеспечивающие 5% суммы маржинальной прибыли по факту продаж за 1 полугодие 2025г."
-        ws.cell(row=start_row + 4, column=1).value = "Оборачиваемость = Средний остаток товара на складе * Количество дней в периоде / Объем продаж (отгрузки) за  период"
-
         # === Форматирование листа "Сводная матрица" ===
         # Переводим pivot_weight в доли, не проценты
         pivot_percent = (pivot_weight / total_weight).round(4)
@@ -297,7 +288,6 @@ def run_analysis(out_file: Path, input_file: Path, task_id: str):
         ws_matrix.cell(row=start_row + 6,
                        column=1).value = " Х <= 30; Y <= 60; Z <= 90; Неликвид > 90"
 
-
         # Заголовки
         for cell in ws_matrix[1]:
             cell.font = Font(bold=True)
@@ -317,8 +307,31 @@ def run_analysis(out_file: Path, input_file: Path, task_id: str):
 
         # Автоширина
         for col in ws_matrix.columns:
+            col_letter = get_column_letter(col[0].column)
             max_length = max(len(str(cell.value)) if cell.value else 0 for cell in col)
-            ws_matrix.column_dimensions[get_column_letter(col[0].column)].width = max_length + 2
+
+            # Если это первый столбец (Группа ABC) — уменьшаем ширину в 3 раза
+            if col[0].column == 1:
+                ws_matrix.column_dimensions[col_letter].width = max(max_length // 3, 5)
+            else:
+                ws_matrix.column_dimensions[col_letter].width = max_length + 2
+
+        # добавить тонкие границы только к строкам
+        # "Группа ABC", "A", "B", "C", "Без группы" в листе "Сводная матрица"
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+
+        target_rows = {"Группа ABC", "A", "B", "C", "Без группы"}
+
+        for row in ws_matrix.iter_rows(min_row=2, max_row=ws_matrix.max_row):
+            row_label = str(row[0].value).strip() if row[0].value else ""
+            if row_label in target_rows:
+                for cell in row:
+                    cell.border = thin_border
 
         wb.save(out_file)
         log_message("Форматирование 'Сводной матрицы' завершено")
@@ -330,12 +343,9 @@ def run_analysis(out_file: Path, input_file: Path, task_id: str):
 
         wb.save(out_file)
 
-
         # Группировка по ABC_XYZ
         weights = df_full.groupby("ABC_XYZ")["Всего отгрузка,кг"].sum()
         weights_percent = (weights / total_weight * 100).round(2)
-
-
 
         xyz_info = (
             f"X ≤ {xyz_thresholds['X']} дн., "
@@ -343,7 +353,8 @@ def run_analysis(out_file: Path, input_file: Path, task_id: str):
             f"Z ≤ {xyz_thresholds['Z']} дн."
         )
 
-        period_name = extract_period_from_filename(input_file)
+        # определение периода ABC-XYZ анализа  из original_filename
+        period_name = extract_period_from_filename(original_filename)
         if period_name == "Период не указан":
             log_message("⚠️ Не удалось извлечь период из имени файла. Используется fallback.")
         log_message(f"📅 Период анализа: {period_name}")
@@ -368,7 +379,7 @@ def run_analysis(out_file: Path, input_file: Path, task_id: str):
         #  ========================================
         # встраиваем диаграмму в Excel
         wb = load_workbook(out_file)
-        ws_chart = wb["Диаграмма"] if "Диаграмма" in wb.sheetnames else wb.create_sheet("Диаграмма")
+        ws_chart = wb["Диаграмма"] if "Диаграмма" in wb.sheetnames else wb.create_sheet(f"Диаграмма {period_name}")
 
         img = Image(str(chart_path))
         img.width, img.height = 480, 480
@@ -383,7 +394,7 @@ def run_analysis(out_file: Path, input_file: Path, task_id: str):
         log_message(f"✅ Анализ завершён: {out_file.name}")
         log_message(f"⏱️ Время выполнения: {(datetime.now() - start).total_seconds():.2f} сек")
         gc.collect()
-    #     --------copilot------------------------------
+        # --------copilot------------------------------
 
     except Exception as e:
         error_log = Path(__file__).resolve().parent / "error.log"
